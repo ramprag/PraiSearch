@@ -1,21 +1,24 @@
-/* frontend/src/styles.css */
+/* frontend/src/styles.css - Improved version */
 .app {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
   padding: 20px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #f8f9fa;
+  line-height: 1.6;
 }
 
 h1 {
   color: #1a73e8;
   font-size: 2.5em;
   text-align: center;
+  margin-bottom: 10px;
 }
 
 p {
   color: #555;
   text-align: center;
+  margin-bottom: 20px;
 }
 
 .autosuggest-container {
@@ -24,59 +27,215 @@ p {
 
 .autosuggest-container input {
   width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  padding: 15px;
+  border: 2px solid #ddd;
+  border-radius: 12px;
   font-size: 1.1em;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.autosuggest-container input:focus {
+  outline: none;
+  border-color: #1a73e8;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.2);
 }
 
 .autosuggest-container .react-autosuggest__suggestions-container--open {
   border: 1px solid #ddd;
   background: white;
-  border-radius: 8px;
-  max-height: 200px;
+  border-radius: 12px;
+  max-height: 250px;
   overflow-y: auto;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 5px;
 }
 
 .autosuggest-container .react-autosuggest__suggestion {
-  padding: 12px;
+  padding: 12px 15px;
   cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.95em;
+}
+
+.autosuggest-container .react-autosuggest__suggestion:last-child {
+  border-bottom: none;
 }
 
 .autosuggest-container .react-autosuggest__suggestion--highlighted {
   background-color: #e8f0fe;
+  color: #1a73e8;
 }
 
 .privacy-log, .answer, .results {
-  margin-top: 20px;
-  padding: 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  margin-top: 25px;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
   background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .privacy-log h3, .answer h3, .results h3 {
   color: #1a73e8;
   margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.3em;
+  font-weight: 600;
+}
+
+.answer {
+  border-left: 4px solid #1a73e8;
+  background: #f8f9ff;
+}
+
+.answer p {
+  text-align: left;
+  color: #333;
+  font-size: 1.05em;
+  line-height: 1.7;
+  margin: 0;
 }
 
 .results ul {
   list-style-type: none;
   padding: 0;
+  margin: 0;
 }
 
 .results li {
-  margin-bottom: 15px;
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.results li:last-child {
+  border-bottom: none;
 }
 
 .results a {
   color: #1a73e8;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 1.1em;
+  display: block;
+  margin-bottom: 8px;
 }
 
 .results a:hover {
   text-decoration: underline;
+  color: #1557b0;
+}
+
+.results p {
+  color: #444;
+  text-align: left;
+  margin: 0;
+  line-height: 1.6;
+  font-size: 0.95em;
+}
+
+/* Expandable content for long results */
+.result-content {
+  position: relative;
+}
+
+.result-content.collapsed {
+  max-height: 150px;
+  overflow: hidden;
+}
+
+.result-content.collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(transparent, white);
+}
+
+.expand-btn {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85em;
+  margin-top: 8px;
+  transition: background-color 0.2s;
+}
+
+.expand-btn:hover {
+  background: #1557b0;
+}
+
+/* No results section */
+.no-results {
+  margin-top: 25px;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #f9f9f9;
+  text-align: center;
+}
+
+.no-results h3 {
+  color: #666;
+  margin-bottom: 15px;
+}
+
+.search-tips {
+  text-align: left;
+  margin-top: 20px;
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.search-tips h4 {
+  color: #1a73e8;
+  margin-bottom: 10px;
+}
+
+.search-tips ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.search-tips li {
+  margin-bottom: 5px;
+  color: #555;
+}
+
+/* Loading states */
+.loading {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 20px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .app {
+    padding: 15px;
+    margin: 10px;
+  }
+
+  h1 {
+    font-size: 2em;
+  }
+
+  .autosuggest-container input {
+    padding: 12px;
+    font-size: 1em;
+  }
+
+  .privacy-log, .answer, .results {
+    padding: 15px;
+    margin-top: 20px;
+  }
 }

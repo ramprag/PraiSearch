@@ -5,3 +5,7 @@ whoosh==2.7.4
 torch==2.0.1
 requests==2.31.0
 cryptography==40.0.2
+beautifulsoup4==4.12.2
+numpy==1.24.3
+pandas==2.0.2
+sentence-transformers==2.2.2
