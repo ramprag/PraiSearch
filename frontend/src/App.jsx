@@ -1,6 +1,7 @@
 // frontend/src/App.jsx - Improved version
 import React, { useState } from 'react';
 import Autosuggest from './Autosuggest';
+import SearchResultItem from './SearchResultItem';
 import axios from 'axios';
 import './styles.css';
 
@@ -9,7 +10,12 @@ function App() {
   const [answer, setAnswer] = useState('');
   const [privacyLog, setPrivacyLog] = useState('');
   const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [expandedResults, setExpandedResults] = useState(new Set());
+
+  // Use environment variable for API URL, with a fallback for local development
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
   const handleSearch = async (query) => {
     if (!query.trim()) return;
@@ -21,7 +27,9 @@ function App() {
     setExpandedResults(new Set());
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/search', { query });
+       // const response = await axios.post('http://127.0.0.1:8000/search', { query });
+      const response = await axios.post(`${API_BASE_URL}/search`, { query });
+
       setResults(response.data.results || []);
       setAnswer(response.data.answer || '');
       setPrivacyLog(response.data.privacy_log || '');
@@ -33,7 +41,21 @@ function App() {
       setLoading(false);
     }
   };
+   const handleFeedbackSubmit = async (e) => {
+     e.preventDefault();
+     if (!feedback.trim()) return;
 
+     try {
+       await axios.post(`${API_BASE_URL}/feedback`, { feedback });
+       setFeedbackSubmitted(true);
+       setFeedback('');
+       // Reset the success message after 5 seconds
+       setTimeout(() => setFeedbackSubmitted(false), 5000);
+     } catch (error) {
+       console.error('Error submitting feedback:', error);
+       alert('Failed to submit feedback. Please try again later.');
+     }
+   };
   const toggleExpand = (index) => {
     const newExpanded = new Set(expandedResults);
     if (newExpanded.has(index)) {
@@ -42,26 +64,6 @@ function App() {
       newExpanded.add(index);
     }
     setExpandedResults(newExpanded);
-  };
-
-  const truncateText = (text, maxLength = 300) => {
-    if (text.length <= maxLength) return text;
-
-    // Find the last complete sentence within the limit
-    const truncated = text.substring(0, maxLength);
-    const lastSentenceEnd = Math.max(
-      truncated.lastIndexOf('.'),
-      truncated.lastIndexOf('!'),
-      truncated.lastIndexOf('?')
-    );
-
-    if (lastSentenceEnd > maxLength * 0.7) {
-      return truncated.substring(0, lastSentenceEnd + 1);
-    }
-
-    // If no good sentence break, find last space
-    const lastSpace = truncated.lastIndexOf(' ');
-    return truncated.substring(0, lastSpace) + '...';
   };
 
   return (
@@ -94,37 +96,14 @@ function App() {
         <div className="results">
           <h3>📚 Search Results ({results.length} found)</h3>
           <ul>
-            {results.map((result, index) => {
-              const isExpanded = expandedResults.has(index);
-              const shouldTruncate = result.content.length > 300;
-              const displayContent = isExpanded || !shouldTruncate
-                ? result.content
-                : truncateText(result.content);
-
-              return (
-                <li key={index}>
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={`Visit: ${result.title}`}
-                  >
-                    {result.title}
-                  </a>
-                  <div className={`result-content ${!isExpanded && shouldTruncate ? 'collapsed' : ''}`}>
-                    <p>{displayContent}</p>
-                  </div>
-                  {shouldTruncate && (
-                    <button
-                      className="expand-btn"
-                      onClick={() => toggleExpand(index)}
-                    >
-                      {isExpanded ? '▲ Show Less' : '▼ Show More'}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
+            {results.map((result, index) => (
+              <SearchResultItem
+                key={index}
+                result={result}
+                isExpanded={expandedResults.has(index)}
+                onToggleExpand={() => toggleExpand(index)}
+              />
+            ))}
           </ul>
         </div>
       )}
@@ -143,6 +122,32 @@ function App() {
           </div>
         </div>
       )}
+
+       {/* --- Feedback Section --- */}
+       {!loading && (
+         <div className="feedback-section">
+           <h3>Was this helpful? Give Feedback</h3>
+           <p>Help us improve! Let us know what you think about the search results, the answer, or the overall experience.</p>
+           {feedbackSubmitted ? (
+             <div className="feedback-success">
+               <p>✅ Thank you for your feedback!</p>
+             </div>
+           ) : (
+             <form onSubmit={handleFeedbackSubmit}>
+               <textarea
+                 value={feedback}
+                 onChange={(e) => setFeedback(e.target.value)}
+                 placeholder="Was the answer helpful? Are the results relevant? Any suggestions?"
+                 rows="4"
+                 required
+               />
+               <button type="submit" disabled={!feedback.trim()}>
+                 Submit Feedback
+               </button>
+             </form>
+           )}
+         </div>
+       )}
     </div>
   );
 }

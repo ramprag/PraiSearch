@@ -6,10 +6,11 @@ import axios from 'axios';
 const AutosuggestComponent = ({ onSearch }) => {
   const [value, setValue] = useState('');
   const [suggestions, setSuggestions] = useState([]);
-
+   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
   const getSuggestions = async (input) => {
     try {
-      const response = await axios.get(`http://127.0.0.1:8000/suggest?query=${input}`);
+      //const response = await axios.get(`http://127.0.0.1:8000/suggest?query=${input}`);
+       const response = await axios.get(`${API_BASE_URL}/suggest?query=${input}`);
       return response.data.suggestions;
     } catch (error) {
       console.error('Error fetching suggestions:', error);
