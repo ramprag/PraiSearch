@@ -10,11 +10,17 @@ app = FastAPI()
 # It's a good practice to manage allowed origins via environment variables.
 # When you deploy your frontend, you'll set its public URL here.
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+CLOUDFLARE_URL = "https://prai-search.vercel.app"
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
+
+# Split the string into a list of actual origins.
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',')]
+
 
 app.add_middleware(
     CORSMiddleware,
     # Add your deployed frontend URL to the list of allowed origins.
-    allow_origins=[FRONTEND_URL, "http://localhost:3000", "http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
