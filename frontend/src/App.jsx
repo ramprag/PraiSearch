@@ -1,4 +1,4 @@
-// frontend/src/App.jsx - Updated for Vercel deployment
+// frontend/src/App.jsx - ORIGINAL VERSION RESTORED
 import React, { useState } from 'react';
 import Autosuggest from './Autosuggest';
 import SearchResultItem from './SearchResultItem';
@@ -14,11 +14,8 @@ function App() {
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [expandedResults, setExpandedResults] = useState(new Set());
 
-  // Detect if we're running on Vercel or localhost
-  const isProduction = window.location.hostname !== 'localhost';
-  const API_BASE_URL = isProduction
-    ? '/api'  // Use Vercel API routes in production
-    : (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000');
+  // Use environment variable for API URL, with a fallback for local development
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
   const handleSearch = async (query) => {
     if (!query.trim()) return;
@@ -37,13 +34,8 @@ function App() {
       setPrivacyLog(response.data.privacy_log || '');
     } catch (error) {
       console.error('Error:', error);
-      if (isProduction) {
-        setAnswer('Search service temporarily unavailable. This is a demo version with limited functionality.');
-        setPrivacyLog('Demo mode - limited search capability.');
-      } else {
-        setAnswer('Error processing query. Please check if the backend server is running.');
-        setPrivacyLog('Error occurred during query processing.');
-      }
+      setAnswer('Error processing query. Please check if the backend server is running.');
+      setPrivacyLog('Error occurred during query processing.');
     } finally {
       setLoading(false);
     }
@@ -78,12 +70,6 @@ function App() {
     <div className="app">
       <h1>SafeQuery: Privacy-First AI Search</h1>
       <p>Search securely with local processing and privacy protection.</p>
-      {isProduction && (
-        <div className="demo-notice">
-          <p><strong>Demo Version:</strong> This is a simplified version running on Vercel with basic search functionality.</p>
-        </div>
-      )}
-
       <Autosuggest onSearch={handleSearch} />
 
       {loading && (
@@ -126,13 +112,21 @@ function App() {
         <div className="no-results">
           <h3>🔍 No Results Found</h3>
           <p>Try rephrasing your question or adding more content to the knowledge base.</p>
+          <div className="search-tips">
+            <h4>Search Tips:</h4>
+            <ul>
+              <li>Use specific keywords related to your topic</li>
+              <li>Try asking complete questions like "What is artificial intelligence?"</li>
+              <li>Check spelling and try alternative terms</li>
+            </ul>
+          </div>
         </div>
       )}
 
       {!loading && (
         <div className="feedback-section">
           <h3>Was this helpful? Give Feedback</h3>
-          <p>Help us improve! Let us know what you think about the search results.</p>
+          <p>Help us improve! Let us know what you think about the search results, the answer, or the overall experience.</p>
           {feedbackSubmitted ? (
             <div className="feedback-success">
               <p>✅ Thank you for your feedback!</p>
@@ -142,7 +136,7 @@ function App() {
               <textarea
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Was the answer helpful? Any suggestions?"
+                placeholder="Was the answer helpful? Are the results relevant? Any suggestions?"
                 rows="4"
                 required
               />
