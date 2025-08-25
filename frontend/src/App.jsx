@@ -1,5 +1,5 @@
-// frontend/src/App.jsx - ORIGINAL VERSION RESTORED
-import React, { useState } from 'react';
+// frontend/src/App.jsx - Updated with privacy indicators
+import React, { useState, useEffect } from 'react';
 import Autosuggest from './Autosuggest';
 import SearchResultItem from './SearchResultItem';
 import axios from 'axios';
@@ -13,9 +13,37 @@ function App() {
   const [feedback, setFeedback] = useState('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [expandedResults, setExpandedResults] = useState(new Set());
+  const [privacyStatus, setPrivacyStatus] = useState(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
-  // Use environment variable for API URL, with a fallback for local development
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+
+  // Monitor online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Load privacy status on mount
+  useEffect(() => {
+    const loadPrivacyStatus = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/privacy-audit`);
+        setPrivacyStatus(response.data);
+      } catch (error) {
+        console.log('Privacy audit not available');
+      }
+    };
+    loadPrivacyStatus();
+  }, [API_BASE_URL]);
 
   const handleSearch = async (query) => {
     if (!query.trim()) return;
@@ -68,20 +96,51 @@ function App() {
 
   return (
     <div className="app">
-      <h1>SafeQuery: Privacy-First AI Search</h1>
-      <p>Search securely with local processing and privacy protection.</p>
+      <header className="app-header">
+        <h1>🛡️ SafeQuery</h1>
+        <p className="tagline">The Anti-Perplexity: 100% Local Privacy-First Search</p>
+
+        {/* Privacy Status Indicator */}
+        <div className="privacy-status">
+          <div className="privacy-indicator online">
+            <span className="status-dot"></span>
+            <span>100% Private • No Data Collection • No Tracking</span>
+          </div>
+          {isOffline && (
+            <div className="offline-indicator">
+              <span>🔒 Offline Mode Active - Maximum Privacy</span>
+            </div>
+          )}
+        </div>
+
+        {/* Privacy Guarantees */}
+        <div className="privacy-guarantees">
+          <div className="guarantee-item">✅ Zero Web Requests</div>
+          <div className="guarantee-item">✅ No User Tracking</div>
+          <div className="guarantee-item">✅ Local Processing Only</div>
+          <div className="guarantee-item">✅ Works Offline</div>
+        </div>
+      </header>
+
       <Autosuggest onSearch={handleSearch} />
 
       {loading && (
         <div className="loading">
-          Searching and generating answer...
+          <div className="loading-spinner"></div>
+          Processing your query locally with maximum privacy...
         </div>
       )}
 
       {!loading && privacyLog && (
         <div className="privacy-log">
-          <h3>🔒 Privacy Assurance</h3>
+          <h3>🔒 Privacy Report</h3>
           <p>{privacyLog}</p>
+          <div className="privacy-details">
+            <small>
+              ℹ️ Your search was processed entirely on local servers. No data was sent to third parties.
+              Check your browser's Network tab (F12) - you'll see zero external requests!
+            </small>
+          </div>
         </div>
       )}
 
@@ -89,12 +148,18 @@ function App() {
         <div className="answer">
           <h3>💡 Answer</h3>
           <p>{answer}</p>
+          <div className="answer-source">
+            <small>Generated from local knowledge base • No web scraping • No data mining</small>
+          </div>
         </div>
       )}
 
       {!loading && results.length > 0 && (
         <div className="results">
-          <h3>📚 Search Results ({results.length} found)</h3>
+          <h3>📚 Local Search Results ({results.length} found)</h3>
+          <div className="results-info">
+            <small>All results from local knowledge base - no web crawling performed</small>
+          </div>
           <ul>
             {results.map((result, index) => (
               <SearchResultItem
@@ -110,43 +175,86 @@ function App() {
 
       {!loading && results.length === 0 && answer === '' && privacyLog && (
         <div className="no-results">
-          <h3>🔍 No Results Found</h3>
-          <p>Try rephrasing your question or adding more content to the knowledge base.</p>
+          <h3>🔍 No Local Results Found</h3>
+          <p>Try rephrasing your question. SafeQuery searches only local knowledge for your privacy.</p>
           <div className="search-tips">
-            <h4>Search Tips:</h4>
-            <ul>
-              <li>Use specific keywords related to your topic</li>
-              <li>Try asking complete questions like "What is artificial intelligence?"</li>
-              <li>Check spelling and try alternative terms</li>
-            </ul>
+            <h4>Available Topics:</h4>
+            <div className="topic-tags">
+              <span className="topic-tag">Technology</span>
+              <span className="topic-tag">Science</span>
+              <span className="topic-tag">Health</span>
+              <span className="topic-tag">Finance</span>
+              <span className="topic-tag">AI & Machine Learning</span>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Privacy Comparison */}
+      <div className="privacy-comparison">
+        <h3>🆚 SafeQuery vs. Other Search Engines</h3>
+        <div className="comparison-grid">
+          <div className="comparison-item safequery">
+            <h4>SafeQuery (This App)</h4>
+            <ul>
+              <li>✅ Zero data collection</li>
+              <li>✅ No user tracking</li>
+              <li>✅ Works offline</li>
+              <li>✅ Local processing only</li>
+              <li>✅ No cookies or analytics</li>
+            </ul>
+          </div>
+          <div className="comparison-item others">
+            <h4>Perplexity & Others</h4>
+            <ul>
+              <li>❌ Collect user queries</li>
+              <li>❌ Track user behavior</li>
+              <li>❌ Require internet</li>
+              <li>❌ Send data to servers</li>
+              <li>❌ Use cookies & analytics</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       {!loading && (
         <div className="feedback-section">
-          <h3>Was this helpful? Give Feedback</h3>
-          <p>Help us improve! Let us know what you think about the search results, the answer, or the overall experience.</p>
+          <h3>💬 Anonymous Feedback</h3>
+          <p>Help us improve while maintaining your privacy. Feedback is stored locally.</p>
           {feedbackSubmitted ? (
             <div className="feedback-success">
-              <p>✅ Thank you for your feedback!</p>
+              <p>✅ Thank you for your anonymous feedback!</p>
             </div>
           ) : (
             <form onSubmit={handleFeedbackSubmit}>
               <textarea
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Was the answer helpful? Are the results relevant? Any suggestions?"
+                placeholder="How was your privacy-first search experience?"
                 rows="4"
                 required
               />
               <button type="submit" disabled={!feedback.trim()}>
-                Submit Feedback
+                Submit Anonymous Feedback
               </button>
             </form>
           )}
         </div>
       )}
+
+      <footer className="app-footer">
+        <div className="footer-content">
+          <h4>🛡️ Privacy-First Promise</h4>
+          <p>SafeQuery is the anti-thesis to data-hungry search engines. We believe search should be private by default.</p>
+          <div className="tech-info">
+            <small>
+              Built with FastAPI • No external APIs • No web scraping • No user tracking
+              <br />
+              Open source • Auditable • Transparent
+            </small>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

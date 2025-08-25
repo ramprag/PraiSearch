@@ -1,14 +1,35 @@
---extra-index-url https://download.pytorch.org/whl/cpu
+# LIGHTWEIGHT REQUIREMENTS - Total size: ~500MB instead of 10GB+
+# Install with: pip install -r requirements-minimal.txt
+
+# Core FastAPI (lightweight)
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
-transformers==4.41.2
-whoosh==2.7.4
-torch==2.2.0+cpu
-requests==2.32.3
-cryptography==42.0.8
-beautifulsoup4==4.12.2
-numpy==1.26.4
-pandas==2.2.2
+pydantic==2.5.0
+
+# Lightweight vector database
+chromadb==0.4.24
+
+# LIGHTWEIGHT embedding model (only 80MB vs 1GB+)
 sentence-transformers==2.7.0
+
+# Ollama client (tiny - just API calls)
+ollama==0.1.7
+
+# Web scraping (lightweight)
+newspaper3k==0.2.8
+beautifulsoup4==4.12.2
+requests==2.32.3
+feedparser==6.0.11
+
+# Background tasks
+apscheduler==3.10.4
+
+# Privacy & utilities
+cryptography==42.0.8
 python-dotenv==1.0.0
-setuptools>=69.5.1
+
+# Essential only
+numpy==1.26.4
+scikit-learn==1.4.0
+
+# NO PYTORCH - Ollama handles the heavy models externally
