@@ -18,7 +18,7 @@ def search_query(query_str: str):
         index_dir = os.path.join(os.path.dirname(__file__), "whoosh_index")
         if not os.path.exists(index_dir):
             logger.warning(f"Whoosh index directory not found at {index_dir}. Cannot perform fallback search.")
-            return [], "Local index not available."
+            return [], "Local index not available.", "Error: Whoosh index not found."
 
         ix = open_dir(index_dir)
         with ix.searcher() as searcher:
@@ -27,10 +27,10 @@ def search_query(query_str: str):
             results = searcher.search(query)
             for hit in results:
                 results_list.append(hit.fields())
-        return results_list, "Search completed."
+        return results_list, f"Found {len(results_list)} results in local index.", "Query processed with local index search [Fallback Mode]"
     except Exception as e:
         logger.error(f"Whoosh search error: {e}", exc_info=True)
-        return [], "Error during local index search."
+        return [], "Error during local index search.", "Error: Whoosh search failed."
 
 def get_suggestions(query):
     """Generate simple, pattern-based search suggestions without a heavy model."""

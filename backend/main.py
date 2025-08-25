@@ -33,6 +33,12 @@ async def lifespan(app: FastAPI):
     app.state.crawler.run()
     logger.info("Initial crawl complete. Knowledge base is ready.")
 
+    # --- Post-Crawl Verification ---
+    post_crawl_stats = rag_system.get_knowledge_base_stats()
+    if post_crawl_stats.get("total_documents", 0) == 0:
+        logger.warning("CRITICAL: Initial crawl finished, but the knowledge base is still empty. The crawler may be unable to find or process articles.")
+    # --- End Verification ---
+
     # --- Schedule Subsequent Crawls ---
     app.state.scheduler.add_job(app.state.crawler.run, 'interval', hours=4, id="periodic_crawl")
     app.state.scheduler.start()
