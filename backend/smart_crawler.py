@@ -5,13 +5,18 @@ from urllib.parse import urlparse, urljoin, unquote
 import logging
 import time
 import random
-from typing import List, Dict
+from typing import List, Dict, Set
 import hashlib
+import re
+from duckduckgo_search import DDGS # Import the library
+# Import the RAG system to interact with the knowledge base
+from mistral_rag import MistralRAG
 
 logger = logging.getLogger(__name__)
 
-class PrivacyFirstCrawler:
-    def __init__(self):
+class SmartCrawler:
+    def __init__(self, rag_system: MistralRAG):
+        self.rag_system = rag_system
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -29,33 +34,19 @@ class PrivacyFirstCrawler:
 
     def get_search_urls(self, query: str, num_results: int = 5) -> List[str]:
         """Get search results from DuckDuckGo (privacy-focused search)"""
+        logger.info(f"Searching for URLs related to: '{query}'")
         try:
-            # Use DuckDuckGo instead of Google for privacy
-            search_url = "https://duckduckgo.com/html/"
-            params = {'q': query, 'b': ''}
-
-            # Rotate user agent for privacy
-            self.session.headers['User-Agent'] = random.choice(self.user_agents)
-
-            response = self.session.get(search_url, params=params, timeout=10)
-            response.raise_for_status()
-
-            soup = BeautifulSoup(response.content, 'html.parser')
-            urls = []
-
-            # Extract URLs from DuckDuckGo results
-            for result in soup.find_all('a', class_='result__a'):
-                href = result.get('href')
-                if href and href.startswith('http'):
-                    # Clean and validate URL
-                    clean_url = unquote(href)
-                    if self.is_valid_url(clean_url):
-                        urls.append(clean_url)
-                        if len(urls) >= num_results:
-                            break
+            # Use the duckduckgo-search library for a reliable search
+            with DDGS() as ddgs:
+                # Fetch a few more results than needed to account for filtering
+                results = [r['href'] for r in ddgs.text(query, max_results=num_results * 2)]
+            
+            # Filter for valid, non-blocked URLs
+            valid_urls = [url for url in results if self.is_valid_url(url)]
+            urls = list(dict.fromkeys(valid_urls)) # Remove duplicates
 
             logger.info(f"Found {len(urls)} URLs for query: {self.anonymize_query(query)}")
-            return urls
+            return urls[:num_results]
 
         except Exception as e:
             logger.error(f"Error getting search URLs: {e}")
@@ -166,8 +157,6 @@ class PrivacyFirstCrawler:
 
     def sanitize_content(self, article: Dict[str, str]) -> Dict[str, str]:
         """Remove potentially sensitive information"""
-        import re
-
         # Remove email addresses
         email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         article['content'] = re.sub(email_pattern, '[EMAIL]', article['content'])
@@ -181,8 +170,19 @@ class PrivacyFirstCrawler:
 
         return article
 
-# Usage example
-def crawl_diverse_topics(query: str) -> List[Dict[str, str]]:
-    """Main function to crawl web content for diverse topics"""
-    crawler = PrivacyFirstCrawler()
-    return crawler.crawl_for_query(query, max_articles=3)
+    def run(self):
+        """
+        The main entry point for the crawler, to be called by the scheduler.
+        This method defines topics, crawls them, and stores the results.
+        """
+        logger.info("🚀 Starting scheduled crawl to populate knowledge base...")
+        
+        # Define a list of diverse topics to keep the knowledge base fresh
+        topics = ["latest advancements in AI", "python programming best practices", "climate change solutions"]
+        
+        for topic in topics:
+            articles = self.crawl_for_query(topic, max_articles=2)
+            if articles:
+                self.rag_system.store_documents(articles)
+        
+        logger.info("✅ Scheduled crawl finished.")

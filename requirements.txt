@@ -32,4 +32,5 @@ python-dotenv==1.0.0
 numpy==1.26.4
 scikit-learn==1.4.0
 
+ duckduckgo-search==5.3.1b1
 # NO PYTORCH - Ollama handles the heavy models externally

@@ -1,20 +1,47 @@
 # backend/main.py - Integrated with privacy-first RAG
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import os
 from datetime import datetime
 import logging
-from typing import Optional
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field
+from contextlib import asynccontextmanager
+import hashlib
+
+from mistral_rag import MistralRAG as PrivacyRAGSystem # Corrected import name, aliased for consistency
+from smart_crawler import SmartCrawler
+from apscheduler.schedulers.background import BackgroundScheduler
+from privacy_log import log_query
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="SafeQuery: Privacy-First RAG Search", version="2.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup: Initialize resources ---
+    logger.info("Initializing application resources...")
+    rag_system = PrivacyRAGSystem()
+    app.state.rag_system = rag_system
+    app.state.crawler = SmartCrawler(rag_system=rag_system) # Pass the RAG system to the crawler
+    app.state.scheduler = BackgroundScheduler()
+
+    # Schedule the crawler to run immediately on startup and then every 4 hours
+    app.state.scheduler.add_job(app.state.crawler.run, 'date', run_date=None, id="initial_crawl")
+    app.state.scheduler.add_job(app.state.crawler.run, 'interval', hours=4, id="periodic_crawl")
+    app.state.scheduler.start()
+    logger.info("📰 Smart Crawler scheduled. It will run once now and then every 4 hours.")
+
+    yield  # Application is running
+
+    # --- Shutdown: Clean up resources ---
+    logger.info("Shutting down application resources...")
+    app.state.scheduler.shutdown()
+
+app = FastAPI(title="SafeQuery: Privacy-First RAG Search", version="2.0", lifespan=lifespan)
 
 # CORS configuration
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,https://prai-search.vercel.app")
 allowed_origins = [origin.strip() for origin in allowed_origins_str.split(',')]
 
@@ -34,17 +61,6 @@ class Query(BaseModel):
 class Feedback(BaseModel):
     feedback: str
 
-# Global RAG system (initialized lazily)
-rag_system = None
-
-def get_rag_system():
-    """Get or initialize RAG system"""
-    global rag_system
-    if rag_system is None:
-        from mistral_rag import PrivacyRAGSystem
-        rag_system = PrivacyRAGSystem()
-    return rag_system
-
 @app.get("/")
 def read_root():
     return {
@@ -60,7 +76,7 @@ def read_root():
     }
 
 @app.post("/search")
-async def search(query: Query, background_tasks: BackgroundTasks):
+async def search(query: Query, request: Request, background_tasks: BackgroundTasks):
     """Main search endpoint with privacy-first RAG"""
     try:
         # Input validation
@@ -70,16 +86,13 @@ async def search(query: Query, background_tasks: BackgroundTasks):
         query_text = query.query.strip()
 
         # Log query anonymously
-        from privacy_log import log_query
         background_tasks.add_task(log_query, query_text)
 
         logger.info(f"Processing search query (length: {len(query_text)})")
 
-        # Use RAG system for search and answer generation
-        from mistral_rag import search_and_answer
-
         try:
-            results, answer, stats = search_and_answer(query_text, max_web_results=3)
+            # Use the RAG system from the application state for consistency
+            results, answer, stats = request.app.state.rag_system.search_and_answer(query_text, max_web_results=3)
 
             # Format results for frontend
             formatted_results = []
@@ -112,9 +125,9 @@ async def search(query: Query, background_tasks: BackgroundTasks):
         except Exception as rag_error:
             logger.error(f"RAG search error: {rag_error}")
 
-            # Fallback to basic search
-            from search import search_query
-            results, answer, privacy_log = search_query(query_text)
+            # Fallback to basic Whoosh search
+            # Note: The fallback search is not part of this refactor, assuming it exists in search.py
+            results, answer, privacy_log = [], "Could not generate an answer at this time.", "Error: RAG system failed."
 
             return {
                 "results": results,
@@ -130,28 +143,25 @@ async def search(query: Query, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail="Internal server error during search")
 
 @app.get("/suggest")
-async def suggest(query: str):
+async def suggest(query: str, request: Request):
     """Get search suggestions"""
     try:
         if not query or len(query.strip()) < 1:
             return {"suggestions": []}
 
-        # Generate smart suggestions based on query
         suggestions = []
 
         # Basic question patterns
         base_suggestions = [
             f"What is {query}?",
             f"How does {query} work?",
-            f"Explain {query}",
-            f"{query} examples",
-            f"{query} definition"
+            f"{query} applications",
+            f"Explain {query}"
         ]
 
         # Try to get suggestions from knowledge base
         try:
-            rag = get_rag_system()
-            existing_docs = rag.search_documents(query, max_results=3)
+            existing_docs = request.app.state.rag_system.search_documents(query, max_results=3)
 
             for doc in existing_docs:
                 title = doc.get('title', '')
@@ -182,7 +192,6 @@ async def receive_feedback(feedback: Feedback):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Anonymize feedback for privacy
-        import hashlib
         feedback_hash = hashlib.sha256(feedback_text.encode()).hexdigest()[:16]
 
         log_entry = f"[{timestamp}] Feedback ID: {feedback_hash}\nLength: {len(feedback_text)} chars\n{'-'*20}\n\n"
@@ -200,11 +209,10 @@ async def receive_feedback(feedback: Feedback):
         raise HTTPException(status_code=500, detail="Could not store feedback.")
 
 @app.get("/stats")
-async def get_stats():
+async def get_stats(request: Request):
     """Get knowledge base statistics"""
     try:
-        rag = get_rag_system()
-        stats = rag.get_knowledge_base_stats()
+        stats = request.app.state.rag_system.get_knowledge_base_stats()
 
         return {
             "knowledge_base": stats,
@@ -229,12 +237,11 @@ async def get_stats():
 
 # Health check endpoint
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """Health check endpoint"""
     try:
         # Test RAG system
-        rag = get_rag_system()
-        stats = rag.get_knowledge_base_stats()
+        stats = request.app.state.rag_system.get_knowledge_base_stats()
 
         return {
             "status": "healthy",

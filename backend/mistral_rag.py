@@ -10,7 +10,7 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
-class PrivacyFirstCrawler:
+class MistralRAG:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
@@ -184,5 +184,5 @@ class PrivacyFirstCrawler:
 # Usage example
 def crawl_diverse_topics(query: str) -> List[Dict[str, str]]:
     """Main function to crawl web content for diverse topics"""
-    crawler = PrivacyFirstCrawler()
+    crawler = MistralRAG()
     return crawler.crawl_for_query(query, max_articles=3)
