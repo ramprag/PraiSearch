@@ -25,6 +25,9 @@ duckduckgo-search==6.1.6
 # Background tasks
 apscheduler==3.10.4
 
+# Local search index
+whoosh==2.7.4
+
 # Privacy & utilities
 cryptography==42.0.8
 python-dotenv==1.0.0
