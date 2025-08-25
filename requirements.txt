@@ -16,12 +16,11 @@ numpy==1.26.4
 # Ollama client (tiny - just API calls)
 ollama==0.2.1
 
-# Web scraping (lightweight)
+# Web scraping (lightweight) - REMOVED duckduckgo-search to avoid rate limits
 newspaper3k==0.2.8
 beautifulsoup4==4.12.2
 requests==2.32.3
 feedparser==6.0.11
-duckduckgo-search==6.1.6
 
 # Background tasks
 apscheduler==3.10.4
