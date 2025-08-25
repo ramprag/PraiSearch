@@ -28,11 +28,15 @@ async def lifespan(app: FastAPI):
     app.state.crawler = SmartCrawler(rag_system=rag_system) # Pass the RAG system to the crawler
     app.state.scheduler = BackgroundScheduler()
 
-    # Schedule the crawler to run immediately on startup and then every 4 hours
-    app.state.scheduler.add_job(app.state.crawler.run, 'date', run_date=None, id="initial_crawl")
+    # --- Synchronous Initial Crawl ---
+    logger.info("Performing initial synchronous crawl to ensure data is available...")
+    app.state.crawler.run()
+    logger.info("Initial crawl complete. Knowledge base is ready.")
+
+    # --- Schedule Subsequent Crawls ---
     app.state.scheduler.add_job(app.state.crawler.run, 'interval', hours=4, id="periodic_crawl")
     app.state.scheduler.start()
-    logger.info("📰 Smart Crawler scheduled. It will run once now and then every 4 hours.")
+    logger.info("📰 Smart Crawler scheduled to run every 4 hours.")
 
     yield  # Application is running
 

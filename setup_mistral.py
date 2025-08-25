@@ -48,7 +48,8 @@ def main():
     else:  # Windows
         print("1. Install Ollama: If you haven't, download and run the Windows installer from ollama.ai.")
 
-    print("2. Download Mistral: ollama pull mistral:7b")
+    print("\n👉 For systems with limited RAM (< 8GB), use a smaller model:")
+    print("2. Download a Model: ollama pull gemma:2b (recommended) OR ollama pull mistral:7b")
     print("3. Start server: In your project's 'backend' directory, run -> uvicorn main:app --reload --port 8000")
 
 if __name__ == "__main__":
