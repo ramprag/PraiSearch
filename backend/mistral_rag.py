@@ -1,185 +1,126 @@
-# backend/smart_crawler.py - Fixed version with privacy-first web crawling
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urljoin, unquote
-import logging
-import time
-import random
-from typing import List, Dict
+# backend/mistral_rag.py - Contains the PrivacyRAGSystem (RAG logic)
+import ollama
+import chromadb
+import os
 import hashlib
+import logging
+from typing import List, Dict, Any
+from sentence_transformers import SentenceTransformer
+import re # For cleaning LLM output
 
 logger = logging.getLogger(__name__)
 
-class MistralRAG:
+class PrivacyRAGSystem: # Renamed from MistralRAG for clarity
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
-        # Privacy: Use rotating user agents and delays
-        self.user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
-        ]
+        self.client = ollama.Client()
+        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        # Use os.path.join for cross-platform compatibility and relative path
+        db_path = os.path.join(os.path.dirname(__file__), "chroma_db")
+        self.chroma_client = chromadb.PersistentClient(path=db_path)
+        self.collection = self.chroma_client.get_or_create_collection(name="documents")
+        logger.info("ChromaDB and Embedding Model initialized.")
 
-    def anonymize_query(self, query: str) -> str:
-        """Hash the query for privacy logging"""
-        return hashlib.sha256(query.encode()).hexdigest()[:16]
+    def store_documents(self, documents: List[Dict[str, str]]):
+        """Stores processed documents into ChromaDB."""
+        if not documents:
+            logger.warning("No documents provided to store.")
+            return
 
-    def get_search_urls(self, query: str, num_results: int = 5) -> List[str]:
-        """Get search results from DuckDuckGo (privacy-focused search)"""
-        try:
-            # Use DuckDuckGo instead of Google for privacy
-            search_url = "https://duckduckgo.com/html/"
-            params = {'q': query, 'b': ''}
+        ids = []
+        metadatas = []
+        documents_content = []
 
-            # Rotate user agent for privacy
-            self.session.headers['User-Agent'] = random.choice(self.user_agents)
+        for doc in documents:
+            # Use URL as ID or hash content if URL is missing
+            doc_id = doc.get('url', hashlib.sha256(doc['content'].encode()).hexdigest())
+            
+            # Check if document already exists to prevent duplicates
+            if self.collection.get(ids=[doc_id])['ids']:
+                logger.info(f"Document with ID {doc_id} already exists, skipping.")
+                continue
 
-            response = self.session.get(search_url, params=params, timeout=10)
-            response.raise_for_status()
+            ids.append(doc_id)
+            metadatas.append({
+                "title": doc.get('title', 'No Title'),
+                "url": doc.get('url', 'No URL'),
+                "domain": doc.get('domain', 'No Domain')
+            })
+            documents_content.append(doc['content'])
 
-            soup = BeautifulSoup(response.content, 'html.parser')
-            urls = []
+        if not ids:
+            logger.info("All provided documents already exist in the collection.")
+            return
 
-            # Extract URLs from DuckDuckGo results
-            for result in soup.find_all('a', class_='result__a'):
-                href = result.get('href')
-                if href and href.startswith('http'):
-                    # Clean and validate URL
-                    clean_url = unquote(href)
-                    if self.is_valid_url(clean_url):
-                        urls.append(clean_url)
-                        if len(urls) >= num_results:
-                            break
+        embeddings = self.embedding_model.encode(documents_content).tolist()
 
-            logger.info(f"Found {len(urls)} URLs for query: {self.anonymize_query(query)}")
-            return urls
+        self.collection.add(
+            embeddings=embeddings,
+            documents=documents_content,
+            metadatas=metadatas,
+            ids=ids
+        )
+        logger.info(f"Stored {len(ids)} new documents in ChromaDB.")
 
-        except Exception as e:
-            logger.error(f"Error getting search URLs: {e}")
+    def search_documents(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+        """Searches ChromaDB for relevant documents based on query."""
+        if self.collection.count() == 0:
+            logger.warning("ChromaDB collection is empty, no documents to search.")
             return []
 
-    def is_valid_url(self, url: str) -> bool:
-        """Validate URL and check if it's crawlable"""
+        query_embedding = self.embedding_model.encode(query).tolist()
+        results = self.collection.query(
+            query_embeddings=[query_embedding],
+            n_results=max_results,
+            include=['documents', 'metadatas']
+        )
+
+        found_documents = []
+        if results and results['documents']:
+            for i in range(len(results['documents'][0])):
+                doc_content = results['documents'][0][i]
+                metadata = results['metadatas'][0][i]
+                found_documents.append({
+                    "title": metadata.get('title', 'No Title'),
+                    "content": doc_content,
+                    "url": metadata.get('url', 'No URL'),
+                    "domain": metadata.get('domain', 'No Domain')
+                })
+        logger.info(f"Found {len(found_documents)} relevant documents in ChromaDB for query.")
+        return found_documents
+
+    def generate_answer(self, query: str, documents: List[Dict[str, str]]) -> str:
+        """Generates an answer using Ollama based on query and retrieved documents."""
+        context = "\n".join([doc['content'] for doc in documents])
+        if not context:
+            logger.warning("No context provided for answer generation.")
+            return "I couldn't find enough relevant information in the knowledge base to answer your question."
+
+        prompt = f"Using the following context, answer the question concisely and accurately. If the answer is not in the context, state that you don't know.\n\nContext:\n{context}\n\nQuestion: {query}\nAnswer:"
+
         try:
-            parsed = urlparse(url)
-            if not parsed.scheme or not parsed.netloc:
-                return False
-
-            # Skip problematic domains
-            blocked_domains = [
-                'facebook.com', 'twitter.com', 'instagram.com',
-                'youtube.com', 'linkedin.com', 'reddit.com',
-                'pinterest.com', 'tiktok.com'
-            ]
-
-            domain = parsed.netloc.lower()
-            return not any(blocked in domain for blocked in blocked_domains)
-
-        except:
-            return False
-
-    def extract_content(self, url: str) -> Dict[str, str]:
-        """Extract content from URL with privacy protection"""
-        try:
-            # Add random delay for privacy (avoid detection)
-            time.sleep(random.uniform(1, 3))
-
-            # Rotate user agent
-            self.session.headers['User-Agent'] = random.choice(self.user_agents)
-
-            response = self.session.get(url, timeout=15, allow_redirects=True)
-            response.raise_for_status()
-
-            soup = BeautifulSoup(response.content, 'html.parser')
-
-            # Remove unwanted elements
-            for tag in soup(['script', 'style', 'nav', 'header', 'footer', 'aside', 'advertisement']):
-                tag.decompose()
-
-            # Extract title
-            title_tag = soup.find('title')
-            title = title_tag.get_text().strip() if title_tag else "Unknown Title"
-
-            # Extract main content
-            content_selectors = [
-                'article', 'main', '.content', '.post-content',
-                '.entry-content', '.article-content', 'section'
-            ]
-
-            content = ""
-            for selector in content_selectors:
-                elements = soup.select(selector)
-                if elements:
-                    content = ' '.join([elem.get_text().strip() for elem in elements])
-                    break
-
-            # Fallback: extract from body
-            if not content:
-                body = soup.find('body')
-                if body:
-                    # Get paragraphs
-                    paragraphs = body.find_all('p')
-                    content = ' '.join([p.get_text().strip() for p in paragraphs])
-
-            # Clean content
-            content = ' '.join(content.split())  # Remove extra whitespace
-
-            # Validate content quality
-            if len(content) < 100:
-                logger.warning(f"Low quality content from {url}")
-                return None
-
-            return {
-                'title': title[:200],  # Limit title length
-                'content': content[:2000],  # Limit content length
-                'url': url,
-                'domain': urlparse(url).netloc
-            }
-
+            response = self.client.chat(
+                model=os.getenv("OLLAMA_MODEL", "gemma:2b"), # Use gemma:2b as default for lower RAM
+                messages=[{'role': 'user', 'content': prompt}],
+                stream=False
+            )
+            answer = response['message']['content'].strip()
+            # Clean up common LLM artifacts
+            answer = re.sub(r"Based on the context, ", "", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"Based on the provided context, ", "", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"Based on the information provided, ", "", answer, flags=re.IGNORECASE)
+            answer = re.sub(r"I don't have enough information to answer that question based on the provided context.", "I don't have enough information in my knowledge base to answer that question.", answer)
+            return answer
         except Exception as e:
-            logger.error(f"Error extracting {url}: {e}")
-            return None
+            logger.error(f"Ollama generation error: {e}")
+            return "I apologize, but I encountered an error trying to generate an answer. Please try again."
 
-    def crawl_for_query(self, query: str, max_articles: int = 3) -> List[Dict[str, str]]:
-        """Crawl web for query with privacy protection"""
-        logger.info(f"Starting privacy-first crawl for: {self.anonymize_query(query)}")
-
-        # Get search URLs
-        urls = self.get_search_urls(query, num_results=max_articles * 2)
-
-        articles = []
-        for url in urls:
-            if len(articles) >= max_articles:
-                break
-
-            article = self.extract_content(url)
-            if article:
-                # Privacy: Remove personal information patterns
-                article = self.sanitize_content(article)
-                articles.append(article)
-
-        logger.info(f"Successfully crawled {len(articles)} articles")
-        return articles
-
-    def sanitize_content(self, article: Dict[str, str]) -> Dict[str, str]:
-        """Remove potentially sensitive information"""
-        import re
-
-        # Remove email addresses
-        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
-        article['content'] = re.sub(email_pattern, '[EMAIL]', article['content'])
-
-        # Remove phone numbers
-        phone_pattern = r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'
-        article['content'] = re.sub(phone_pattern, '[PHONE]', article['content'])
-
-        # Remove excessive personal references
-        article['content'] = re.sub(r'\b(my|I am|I was|personally)\b', '', article['content'], flags=re.IGNORECASE)
-
-        return article
+    def get_knowledge_base_stats(self) -> Dict[str, Any]:
+        """Returns statistics about the ChromaDB knowledge base."""
+        stats = {
+            "documents_in_collection": self.collection.count()
+        }
+        logger.info(f"Knowledge base stats: {stats}")
+        return stats
 
     def search_and_answer(self, query: str, max_web_results: int = 3) -> (list, str, dict):
         """
@@ -188,7 +129,7 @@ class MistralRAG:
         logger.info(f"Performing RAG search for query: '{query}'")
 
         # 1. Search for relevant documents in the knowledge base
-        documents = self.search_documents(query, max_results=max_web_results) # Retrieve 5 docs for rich context
+        documents = self.search_documents(query, max_results=max_web_results) # Use the passed parameter
 
         # 2. Generate an answer using the retrieved documents
         answer = self.generate_answer(query, documents)
@@ -198,11 +139,5 @@ class MistralRAG:
             "documents_found": len(documents),
             "answer_length": len(answer)
         }
-
+        logger.info(f"RAG search completed for '{query}'. Docs found: {len(documents)}, Answer length: {len(answer)}")
         return documents, answer, stats
-
-# Usage example
-def crawl_diverse_topics(query: str) -> List[Dict[str, str]]:
-    """Main function to crawl web content for diverse topics"""
-    crawler = MistralRAG()
-    return crawler.crawl_for_query(query, max_articles=3)
