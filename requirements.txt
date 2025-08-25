@@ -13,7 +13,7 @@ chromadb==0.4.24
 sentence-transformers==2.7.0
 
 # Ollama client (tiny - just API calls)
-ollama==0.1.7
+ollama==0.2.1
 
 # Web scraping (lightweight)
 newspaper3k==0.2.8
@@ -32,5 +32,5 @@ python-dotenv==1.0.0
 numpy==1.26.4
 scikit-learn==1.4.0
 
- duckduckgo-search==5.3.1b1
+duckduckgo-search==6.1.6
 # NO PYTORCH - Ollama handles the heavy models externally
