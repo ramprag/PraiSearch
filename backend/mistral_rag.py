@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 class PrivacyRAGSystem: # Renamed from MistralRAG for clarity
     def __init__(self):
-        self.client = ollama.Client()
+        # Make the Ollama host configurable via an environment variable
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        self.client = ollama.Client(host=ollama_host)
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         # Use os.path.join for cross-platform compatibility and relative path
         db_path = os.path.join(os.path.dirname(__file__), "chroma_db")
