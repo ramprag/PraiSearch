@@ -181,6 +181,26 @@ class MistralRAG:
 
         return article
 
+    def search_and_answer(self, query: str, max_web_results: int = 3) -> (list, str, dict):
+        """
+        A single method to perform the entire RAG process: search, generate, and return stats.
+        """
+        logger.info(f"Performing RAG search for query: '{query}'")
+
+        # 1. Search for relevant documents in the knowledge base
+        documents = self.search_documents(query, max_results=max_web_results) # Retrieve 5 docs for rich context
+
+        # 2. Generate an answer using the retrieved documents
+        answer = self.generate_answer(query, documents)
+
+        # 3. Compile statistics about the operation
+        stats = {
+            "documents_found": len(documents),
+            "answer_length": len(answer)
+        }
+
+        return documents, answer, stats
+
 # Usage example
 def crawl_diverse_topics(query: str) -> List[Dict[str, str]]:
     """Main function to crawl web content for diverse topics"""
