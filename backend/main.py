@@ -9,10 +9,11 @@ from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
 import hashlib
 
-from mistral_rag import MistralRAG as PrivacyRAGSystem # Corrected import name, aliased for consistency
+from mistral_rag import PrivacyRAGSystem # Direct import for clarity
 from smart_crawler import SmartCrawler
 from apscheduler.schedulers.background import BackgroundScheduler
 from privacy_log import log_query
+from search import get_suggestions, search_query as fallback_search # Import fallback search
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -101,12 +102,12 @@ async def search(query: Query, request: Request, background_tasks: BackgroundTas
                     'title': result.get('title', 'Unknown Title'),
                     'content': result.get('content', '')[:500] + '...' if len(result.get('content', '')) > 500 else result.get('content', ''),
                     'url': result.get('url', ''),
-                    'score': result.get('score', 0.0),
-                    'source': result.get('metadata', {}).get('source', 'local')
+                    'score': result.get('score', 0.0), # Now correctly gets the score
+                    'source': result.get('source', 'unknown') # Now correctly gets the source
                 })
 
             # Privacy log message
-            privacy_log = f"Query processed with privacy protection. Found {len(formatted_results)} results from {stats['storage_type']} storage. Total documents: {stats['total_documents']}"
+            privacy_log = f"Query processed with privacy protection. Found {stats['documents_found_for_query']} relevant results from {stats['storage_type']} storage. Total documents in knowledge base: {stats['total_documents']}"
 
             response = {
                 "results": formatted_results,
@@ -114,7 +115,7 @@ async def search(query: Query, request: Request, background_tasks: BackgroundTas
                 "privacy_log": privacy_log,
                 "stats": {
                     "total_results": len(formatted_results),
-                    "knowledge_base_size": stats['total_documents'],
+                    "knowledge_base_size": stats.get('total_documents', 0),
                     "storage_type": stats['storage_type']
                 }
             }
@@ -124,15 +125,20 @@ async def search(query: Query, request: Request, background_tasks: BackgroundTas
 
         except Exception as rag_error:
             logger.error(f"RAG search error: {rag_error}")
+            import traceback
+            traceback.print_exc() # Print full traceback for debugging
 
-            # Fallback to basic Whoosh search
-            # Note: The fallback search is not part of this refactor, assuming it exists in search.py
-            results, answer, privacy_log = [], "Could not generate an answer at this time.", "Error: RAG system failed."
+            # Fallback to basic Whoosh index search
+            logger.warning("RAG system failed. Attempting fallback to local Whoosh index.")
+            fallback_results, fallback_status = fallback_search(query_text)
+            
+            # Format fallback results to match the expected structure
+            formatted_fallback = [{'title': r.get('title', ''), 'content': r.get('content', ''), 'url': r.get('url', '')} for r in fallback_results]
 
             return {
-                "results": results,
-                "answer": answer + " (Note: Using fallback search due to system limitations)",
-                "privacy_log": privacy_log + " [Fallback mode]",
+                "results": formatted_fallback,
+                "answer": f"Could not generate an AI answer. The following is from a local index search: {fallback_status}",
+                "privacy_log": "Query processed with local index search due to RAG system failure. [Fallback mode]",
                 "stats": {"mode": "fallback"}
             }
 
@@ -246,8 +252,8 @@ async def health_check(request: Request):
         return {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
-            "knowledge_base_size": stats.get('total_documents', 0),
-            "storage_type": stats.get('storage_type', 'unknown')
+            "knowledge_base_size": stats.get('total_documents', 0), # Correctly uses total_documents
+            "storage_type": stats.get('storage_type', 'unknown') # Correctly uses storage_type
         }
     except Exception as e:
         return {

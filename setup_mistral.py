@@ -1,69 +1,55 @@
 #!/usr/bin/env python3
 """
-QUICK LIGHTWEIGHT SETUP - Only essential packages
-Total install size: ~500MB instead of 10GB+
+QUICK LIGHTWEIGHT SETUP - Installs essential packages from requirements.txt and guides the user.
 """
 
 import subprocess
 import sys
 import os
+import platform
 
 def run_cmd(cmd):
     """Run command with real-time output"""
     print(f"🔧 {cmd}")
-    result = subprocess.run(cmd.split(), capture_output=False)
-    return result.returncode == 0
+    # Use shell=True for commands like 'pip install -r ...' which might have complex args
+    process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
+    for line in process.stdout:
+        print(line, end='')
+    process.wait()
+    return process.returncode == 0
 
 def main():
     print("⚡ LIGHTWEIGHT SafeQuery Setup")
-    print("📦 Installing only essential packages (~500MB total)")
+    print("📦 Installing essential packages from backend/requirements.txt")
     print("=" * 50)
 
-    # Create minimal requirements
-    minimal_reqs = [
-        "fastapi==0.111.0",
-        "uvicorn[standard]==0.29.0",
-        "pydantic==2.5.0",
-        "chromadb==0.4.24",
-        "sentence-transformers==2.7.0",
-        "ollama==0.1.7",
-        "newspaper3k==0.2.8",
-        "beautifulsoup4==4.12.2",
-        "requests==2.32.3",
-        "feedparser==6.0.11",
-        "apscheduler==3.10.4",
-        "cryptography==42.0.8",
-        "python-dotenv==1.0.0",
-        "numpy==1.26.4"
-    ]
+    # Install dependencies from requirements.txt located in the backend folder
+    req_file = os.path.join("backend", "requirements.txt")
+    if not os.path.exists(req_file):
+        print(f"❌ Error: '{req_file}' not found. Please ensure it's in the 'backend' directory.")
+        sys.exit(1)
 
-    print("📦 Installing packages one by one...")
-    failed = []
-
-    for package in minimal_reqs:
-        print(f"\n📦 Installing {package.split('==')[0]}...")
-        if not run_cmd(f"pip install {package}"):
-            failed.append(package)
-            print(f"❌ Failed: {package}")
-        else:
-            print(f"✅ Success: {package}")
-
-    if failed:
-        print(f"\n⚠️ Failed packages: {failed}")
-        print("Try installing them manually")
+    if not run_cmd(f'"{sys.executable}" -m pip install -r {req_file}'):
+        print("\n⚠️ An error occurred during package installation. Please check the logs above.")
+        sys.exit(1)
     else:
         print("\n🎉 All packages installed successfully!")
 
-    # Create directories
-    for dir_name in ["chroma_db", "logs"]:
+    # Create directories inside the backend folder
+    for dir_name in [os.path.join("backend", "chroma_db"), os.path.join("backend", "logs")]:
         os.makedirs(dir_name, exist_ok=True)
         print(f"📁 Created: {dir_name}")
 
     print("\n✅ Setup complete!")
     print("\nNext steps:")
-    print("1. Install Ollama: curl -fsSL https://ollama.ai/install.sh | sh")
+
+    if platform.system() in ["Linux", "Darwin"]:  # Darwin is macOS
+        print("1. Install Ollama (if not installed): curl -fsSL https://ollama.ai/install.sh | sh")
+    else:  # Windows
+        print("1. Install Ollama: If you haven't, download and run the Windows installer from ollama.ai.")
+
     print("2. Download Mistral: ollama pull mistral:7b")
-    print("3. Start server: python -m uvicorn main:app --reload --port 8000")
+    print("3. Start server: In your project's 'backend' directory, run -> uvicorn main:app --reload --port 8000")
 
 if __name__ == "__main__":
     main()

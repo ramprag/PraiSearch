@@ -11,6 +11,7 @@ chromadb==0.4.24
 # ML Stack - Explicitly using CPU-only PyTorch for speed and size
 sentence-transformers==2.7.0
 torch==2.2.0+cpu
+ numpy==1.26.4
 
 # Ollama client (tiny - just API calls)
 ollama==0.2.1

@@ -71,7 +71,7 @@ class PrivacyRAGSystem: # Renamed from MistralRAG for clarity
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=max_results,
-            include=['documents', 'metadatas']
+            include=['documents', 'metadatas', 'distances'] # Include distances to calculate score
         )
 
         found_documents = []
@@ -79,11 +79,15 @@ class PrivacyRAGSystem: # Renamed from MistralRAG for clarity
             for i in range(len(results['documents'][0])):
                 doc_content = results['documents'][0][i]
                 metadata = results['metadatas'][0][i]
+                distance = results['distances'][0][i]
+                score = 1 - distance # Convert distance to a similarity score (0 to 1)
                 found_documents.append({
                     "title": metadata.get('title', 'No Title'),
                     "content": doc_content,
                     "url": metadata.get('url', 'No URL'),
-                    "domain": metadata.get('domain', 'No Domain')
+                    "domain": metadata.get('domain', 'No Domain'),
+                    "score": score,
+                    "source": "local_chroma_db"
                 })
         logger.info(f"Found {len(found_documents)} relevant documents in ChromaDB for query.")
         return found_documents
@@ -117,7 +121,8 @@ class PrivacyRAGSystem: # Renamed from MistralRAG for clarity
     def get_knowledge_base_stats(self) -> Dict[str, Any]:
         """Returns statistics about the ChromaDB knowledge base."""
         stats = {
-            "documents_in_collection": self.collection.count()
+            "total_documents": self.collection.count(),
+            "storage_type": "local_chroma_db"
         }
         logger.info(f"Knowledge base stats: {stats}")
         return stats
@@ -135,9 +140,8 @@ class PrivacyRAGSystem: # Renamed from MistralRAG for clarity
         answer = self.generate_answer(query, documents)
 
         # 3. Compile statistics about the operation
-        stats = {
-            "documents_found": len(documents),
-            "answer_length": len(answer)
-        }
+        stats = self.get_knowledge_base_stats()
+        stats["documents_found_for_query"] = len(documents)
+        stats["answer_length"] = len(answer)
         logger.info(f"RAG search completed for '{query}'. Docs found: {len(documents)}, Answer length: {len(answer)}")
         return documents, answer, stats
